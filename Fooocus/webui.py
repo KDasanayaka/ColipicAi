@@ -27,15 +27,24 @@ from modules.ui_gradio_extensions import reload_javascript
 from modules.auth import auth_enabled, check_auth
 
 
-# Image Saving Function
-def save_image(image_array, filename):
-    save_dir = 'generated_images'  # Directory to save images
+def save_image(image_array, filename, base_dir='/content/drive/My Drive/generated_images'):
+    print("Attempting to save image...")
+    # Define the directory to save images, now pointing to a folder in Google Drive
+    save_dir = base_dir
     if not os.path.exists(save_dir):
+        print(f"Directory {save_dir} not found, creating...")
         os.makedirs(save_dir)
     
+    # Check the image format
+    if image_array.dtype != np.uint8:
+        print("Warning: Image array not in uint8 format, converting...")
+        image_array = np.uint8(image_array)
+
     # Convert the NumPy array to a PIL Image and save it
-    image = Image.fromarray(np.uint8(image_array))
-    image.save(os.path.join(save_dir, filename))
+    image = Image.fromarray(image_array)
+    file_path = os.path.join(save_dir, filename)
+    image.save(file_path)
+    print(f"Image saved to {file_path}")
 
 # Modified generate_clicked function with automatic image saving
 def generate_clicked(*args):
