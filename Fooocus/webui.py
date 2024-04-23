@@ -16,6 +16,10 @@ import modules.style_sorter as style_sorter
 import modules.meta_parser
 import args_manager
 import copy
+import numpy as np
+from PIL import Image
+import worker 
+import ldm_patched.modules.model_management as model_management
 
 from modules.sdxl_styles import legal_style_names
 from modules.private_logger import get_current_html_path
@@ -23,13 +27,20 @@ from modules.ui_gradio_extensions import reload_javascript
 from modules.auth import auth_enabled, check_auth
 
 
-def generate_clicked(*args):
-    import ldm_patched.modules.model_management as model_management
+# Image Saving Function
+def save_image(image_array, filename):
+    save_dir = 'generated_images'  # Directory to save images
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    
+    # Convert the NumPy array to a PIL Image and save it
+    image = Image.fromarray(np.uint8(image_array))
+    image.save(os.path.join(save_dir, filename))
 
+# Modified generate_clicked function with automatic image saving
+def generate_clicked(*args):
     with model_management.interrupt_processing_mutex:
         model_management.interrupt_processing = False
-
-    # outputs=[progress_html, progress_window, progress_gallery, gallery]
 
     execution_start_time = time.perf_counter()
     task = worker.AsyncTask(args=list(args))
@@ -47,33 +58,27 @@ def generate_clicked(*args):
         if len(task.yields) > 0:
             flag, product = task.yields.pop(0)
             if flag == 'preview':
+                continue  # Continue as your existing logic handles it
 
-                # help bad internet connection by skipping duplicated preview
-                if len(task.yields) > 0:  # if we have the next item
-                    if task.yields[0][0] == 'preview':   # if the next item is also a preview
-                        # print('Skipped one preview for better internet connection.')
-                        continue
-
-                percentage, title, image = product
-                yield gr.update(visible=True, value=modules.html.make_progress_html(percentage, title)), \
-                    gr.update(visible=True, value=image) if image is not None else gr.update(), \
-                    gr.update(), \
-                    gr.update(visible=False)
             if flag == 'results':
+                for image_data in product:  # Assuming `product` is iterable with image data
+                    save_image(image_data, f"image_{time.strftime('%Y%m%d-%H%M%S')}.png")
                 yield gr.update(visible=True), \
-                    gr.update(visible=True), \
-                    gr.update(visible=True, value=product), \
-                    gr.update(visible=False)
+                      gr.update(visible=True), \
+                      gr.update(visible=True, value=product), \
+                      gr.update(visible=False)
+
             if flag == 'finish':
                 yield gr.update(visible=False), \
-                    gr.update(visible=False), \
-                    gr.update(visible=False), \
-                    gr.update(visible=True, value=product)
+                      gr.update(visible=False), \
+                      gr.update(visible=False), \
+                      gr.update(visible=True, value=product)
                 finished = True
 
     execution_time = time.perf_counter() - execution_start_time
     print(f'Total time: {execution_time:.2f} seconds')
     return
+
 
 
 reload_javascript()
